@@ -1,23 +1,4 @@
-"""
-PyFlink fraud detector — transactions -> alerts (Kafka + MongoDB).
 
-Wymagane JAR-y w detector/jars/ (Flink 1.19):
-  - flink-sql-connector-kafka-3.2.0-1.19.jar
-  - flink-json-1.19.1.jar
-
-Pobranie:
-  mkdir -p detector/jars && cd detector/jars
-  curl -LO https://repo.maven.apache.org/maven2/org/apache/flink/flink-sql-connector-kafka/3.2.0-1.19/flink-sql-connector-kafka-3.2.0-1.19.jar
-  curl -LO https://repo.maven.apache.org/maven2/org/apache/flink/flink-json/1.19.1/flink-json-1.19.1.jar
-
-Uruchomienie (wymagany Python 3.10 lub 3.11 + Java):
-  cd detector
-  python3.11 -m venv .venv && source .venv/bin/activate
-  pip install -r requirements.txt
-  ./run.sh
-
-W klastrze Docker ustaw KAFKA_BOOTSTRAP_SERVERS=kafka:29092, MONGO_URI=mongodb://mongodb:27017
-"""
 from __future__ import annotations
 
 import json
