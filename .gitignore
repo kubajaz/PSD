@@ -85,6 +85,8 @@ secrets/
 # Flink / logs
 logs/
 *.log
+detector/jars/*.jar
+detector/.venv/
 
 # Docker volume data (keep directory structure)
 data/kafka/*
