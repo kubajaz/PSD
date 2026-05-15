@@ -33,6 +33,20 @@ services:
     networks:
       - psd-network
 
+  kafka-ui:
+    image: provectuslabs/kafka-ui:v0.7.2
+    container_name: psd-kafka-ui
+    depends_on:
+      - kafka
+    ports:
+      - "8083:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: psd
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - psd-network
+
   jobmanager:
     image: flink:1.19
     container_name: psd-flink-jobmanager
