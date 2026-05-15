@@ -1,5 +1,5 @@
 """
-PyFlink fraud detector — transactions -> alerts (Kafka).
+PyFlink fraud detector — transactions -> alerts (Kafka + MongoDB).
 
 Wymagane JAR-y w detector/jars/ (Flink 1.19):
   - flink-sql-connector-kafka-3.2.0-1.19.jar
@@ -16,15 +16,16 @@ Uruchomienie (wymagany Python 3.10 lub 3.11 + Java):
   pip install -r requirements.txt
   ./run.sh
 
-W klastrze Docker ustaw KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+W klastrze Docker ustaw KAFKA_BOOTSTRAP_SERVERS=kafka:29092, MONGO_URI=mongodb://mongodb:27017
 """
 from __future__ import annotations
 
 import json
 import math
 import os
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable, Optional
+from typing import Any, Iterable
 
 from pyflink.common import Configuration, Types, WatermarkStrategy
 from pyflink.common.serialization import SimpleStringSchema
@@ -38,10 +39,13 @@ from pyflink.datastream.connectors.kafka import (
     KafkaSink,
     KafkaSource,
 )
-from pyflink.datastream.functions import KeyedProcessFunction, RuntimeContext
+from pyflink.datastream.functions import KeyedProcessFunction, MapFunction, RuntimeContext
 from pyflink.datastream.state import ValueState, ValueStateDescriptor
 
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
+MONGO_URI = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+MONGO_DB = os.getenv("MONGO_DB", "psd")
+MONGO_ALERTS_COLLECTION = os.getenv("MONGO_ALERTS_COLLECTION", "fraud_alerts")
 SOURCE_TOPIC = os.getenv("KAFKA_SOURCE_TOPIC", "transactions")
 SINK_TOPIC = os.getenv("KAFKA_SINK_TOPIC", "alerts")
 CONSUMER_GROUP = os.getenv("KAFKA_CONSUMER_GROUP", "psd-fraud-detector")
@@ -207,6 +211,26 @@ class FraudDetector(KeyedProcessFunction):
         }
 
 
+class MongoAlertPersist(MapFunction):
+    """Zapis alertu do MongoDB (fraud_alerts), przekazuje dalej do Kafki."""
+
+    def open(self, runtime_context: RuntimeContext) -> None:
+        from pymongo import MongoClient
+
+        self._client = MongoClient(MONGO_URI)
+        self._collection = self._client[MONGO_DB][MONGO_ALERTS_COLLECTION]
+
+    def map(self, value: str) -> str:
+        alert = json.loads(value)
+        alert["ingested_at"] = datetime.now(timezone.utc).isoformat()
+        self._collection.insert_one(alert)
+        return value
+
+    def close(self) -> None:
+        if hasattr(self, "_client"):
+            self._client.close()
+
+
 def _add_connector_jars(env: StreamExecutionEnvironment) -> None:
     jar_files = sorted(JARS_DIR.glob("*.jar"))
     if not jar_files:
@@ -250,7 +274,7 @@ def _build_kafka_sink() -> KafkaSink:
 
 def build_pipeline(env: StreamExecutionEnvironment) -> None:
     source = _build_kafka_source()
-    sink = _build_kafka_sink()
+    kafka_sink = _build_kafka_sink()
 
     watermark_strategy = (
         WatermarkStrategy.for_bounded_out_of_orderness(
@@ -260,13 +284,18 @@ def build_pipeline(env: StreamExecutionEnvironment) -> None:
         .with_idleness(Duration.of_seconds(30))
     )
 
-    (
+    alerts = (
         env.from_source(source, watermark_strategy, "transactions")
         .key_by(lambda row: row[0], key_type=Types.INT())
         .process(FraudDetector(), output_type=Types.STRING())
         .name("fraud-detection")
-        .sink_to(sink)
-        .name("alerts-sink")
+    )
+
+    (
+        alerts.map(MongoAlertPersist(), output_type=Types.STRING())
+        .name("alerts-mongo-persist")
+        .sink_to(kafka_sink)
+        .name("alerts-kafka-sink")
     )
 
 
