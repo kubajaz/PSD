@@ -2,6 +2,8 @@
 
 Krótka instrukcja uruchomienia środowiska i podglądu wyników.
 
+**Windows od zera:** zobacz [WINDOWS.md](WINDOWS.md).
+
 ## 1. Infrastruktura (Docker)
 
 ```bash
