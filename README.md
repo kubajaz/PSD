@@ -48,14 +48,25 @@ Wysyła JSON do Kafki, temat **`transactions`** (~5–10 tx/s).
 
 ### Terminal 2 — detektor anomalii (Flink)
 
+**Linux / macOS:**
 ```bash
 cd detector
-python3.11 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
 ./run.sh
 ```
 
-Czyta `transactions`, wysyła alerty do Kafki (**`alerts`**) i zapisuje do MongoDB (`fraud_alerts`).
+**Windows (CMD):**
+```bat
+cd detector
+run.bat
+```
+
+**Windows (PowerShell):**
+```powershell
+cd detector
+.\run.ps1
+```
+
+Czyta `transactions`, wysyła alerty do Kafki (**`alerts`**) i zapisuje do MongoDB (`fraud_alerts`). Wymaga **Python 3.11** i **Java** w PATH.
 
 ### Terminal 3 — podgląd transakcji (opcjonalnie)
 
