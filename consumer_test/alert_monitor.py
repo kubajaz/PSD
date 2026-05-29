@@ -6,7 +6,14 @@ import subprocess
 from datetime import datetime
 from typing import Any
 
-from confluent_kafka import Consumer, KafkaError, KafkaException
+from confluent_kafka import (
+    OFFSET_BEGINNING,
+    OFFSET_END,
+    Consumer,
+    KafkaError,
+    KafkaException,
+    TopicPartition,
+)
 from rich import box
 from rich.console import Console
 from rich.panel import Panel
@@ -14,15 +21,17 @@ from rich.text import Text
 
 KAFKA_BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_ALERT_TOPIC", "alerts")
-KAFKA_GROUP = os.getenv("KAFKA_CONSUMER_GROUP", "psd-alert-monitor")
+KAFKA_GROUP = os.getenv("KAFKA_CONSUMER_GROUP", "psd-alert-monitor-v2")
+# latest = tylko nowe alerty; earliest = od początku tematu
+KAFKA_START_AT = os.getenv("KAFKA_START_AT", "latest").lower()
 
 ASCII_BANNER = r"""
- ███████╗██████╗  █████╗ ██╗   ██╗██████╗     █████╗ ██╗     ███████╗██████╗ ████████╗
- ██╔════╝██╔══██╗██╔══██╗██║   ██║██╔══██╗   ██╔══██╗██║     ██╔════╝██╔══██╗╚══██╔══╝
- █████╗  ██████╔╝███████║██║   ██║██║  ██║   ███████║██║     █████╗  ██████╔╝   ██║
- ██╔══╝  ██╔══██╗██╔══██║██║   ██║██║  ██║   ██╔══██║██║     ██╔══╝  ██╔══██╗   ██║
- ██║     ██║  ██║██║  ██║╚██████╔╝██████╔╝   ██║  ██║███████╗███████╗██║  ██║   ██║
- ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝    ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝   ╚═╝
+   █████╗ ██╗     ███████╗██████╗ ████████╗
+  ██╔══██╗██║     ██╔════╝██╔══██╗╚══██╔══╝
+  ███████║██║     █████╗  ██████╔╝   ██║
+  ██╔══██║██║     ██╔══╝  ██╔══██╗   ██║
+  ██║  ██║███████╗███████╗██║  ██║   ██║
+  ╚═╝  ╚═╝╚══════╝╚══════╝╚═╝  ╚═╝   ╚═╝
 """
 
 ANOMALY_LABELS = {
@@ -119,21 +128,30 @@ def create_consumer() -> Consumer:
         {
             "bootstrap.servers": KAFKA_BOOTSTRAP,
             "group.id": KAFKA_GROUP,
-            "auto.offset.reset": "latest",
             "enable.auto.commit": True,
         }
     )
 
 
+def _assign_from_mode(consumer: Consumer, mode: str) -> None:
+    """Ręczne przypisanie partycji — omija zepsuty offset starej grupy konsumentów."""
+    offset = OFFSET_END if mode == "latest" else OFFSET_BEGINNING
+    consumer.assign([TopicPartition(KAFKA_TOPIC, 0, offset)])
+
+
 def run() -> None:
     consumer = create_consumer()
-    consumer.subscribe([KAFKA_TOPIC])
     console = Console()
 
     console.print(
         f"[green]Monitor alertów[/] — temat [bold]{KAFKA_TOPIC}[/] "
-        f"({KAFKA_BOOTSTRAP})"
+        f"({KAFKA_BOOTSTRAP}, start={KAFKA_START_AT})"
     )
+    console.print(
+        "[dim]Alerty pochodzą z fraud_detector.py (terminal w detector/), "
+        "nie z logger_visualizer.[/]"
+    )
+    _assign_from_mode(consumer, KAFKA_START_AT)
     console.print("[dim]Czekam na alerty… (Ctrl+C aby zakończyć)[/]\n")
 
     try:

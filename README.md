@@ -87,3 +87,10 @@ generator.py  →  Kafka: transactions  →  fraud_detector.py  →  Kafka: aler
                                                       ↓
                                             alert_monitor.py (terminal)
 ```
+
+## 5. Typowe problemy
+
+- **Czerwone transakcje, brak alertów w monitorze** — wizualizer (kwota ≥ 1000 PLN) to nie to samo co Flink. Musi działać **`detector/./run.sh`**.
+- **Monitor milczy / Kafka UI: alerts = 0** — uruchom detektor z `detector/./run.sh` (nie z `consumer_test`). Po restarcie Kafki temat `alerts` bywa pusty — detektor musi działać na żywo.
+- **Detektor nic nie wysyła** — Flink potrzebuje `python` z venv (`run.sh` to ustawia). Log: `Cannot run program "python"`.
+- **`No module named 'pyflink'`** — venv detektora na Python **3.11**

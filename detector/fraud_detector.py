@@ -1,9 +1,9 @@
-
 from __future__ import annotations
 
 import json
 import math
 import os
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable
@@ -204,7 +204,10 @@ class MongoAlertPersist(MapFunction):
     def map(self, value: str) -> str:
         alert = json.loads(value)
         alert["ingested_at"] = datetime.now(timezone.utc).isoformat()
-        self._collection.insert_one(alert)
+        try:
+            self._collection.insert_one(alert)
+        except Exception as exc:  # noqa: BLE001 — log, nie blokuj Kafki
+            print(f"[MongoAlertPersist] zapis nieudany: {exc}", flush=True)
         return value
 
     def close(self) -> None:
@@ -272,16 +275,17 @@ def build_pipeline(env: StreamExecutionEnvironment) -> None:
         .name("fraud-detection")
     )
 
-    (
-        alerts.map(MongoAlertPersist(), output_type=Types.STRING())
-        .name("alerts-mongo-persist")
-        .sink_to(kafka_sink)
-        .name("alerts-kafka-sink")
+    alerts.sink_to(kafka_sink).name("alerts-kafka-sink")
+    alerts.map(MongoAlertPersist(), output_type=Types.STRING()).print().name(
+        "alerts-mongo-persist"
     )
 
 
 def main() -> None:
+    python_exe = sys.executable
     config = Configuration()
+    config.set_string("python.executable", python_exe)
+    config.set_string("python.client.executable", python_exe)
     config.set_string("execution.checkpointing.interval", "60000")
 
     env = StreamExecutionEnvironment.get_execution_environment(configuration=config)

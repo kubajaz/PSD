@@ -14,4 +14,5 @@ if ! .venv/bin/python -c "import pyflink" 2>/dev/null; then
 fi
 
 export KAFKA_BOOTSTRAP_SERVERS="${KAFKA_BOOTSTRAP_SERVERS:-localhost:9092}"
+export PYFLINK_CLIENT_EXECUTABLE="$(pwd)/.venv/bin/python"
 exec .venv/bin/python fraud_detector.py
